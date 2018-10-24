@@ -1,6 +1,7 @@
 package cafe.adriel.androidaudioconverter;
 
 import android.content.Context;
+import android.util.Log;
 
 import com.github.hiteshsondhi88.libffmpeg.FFmpeg;
 import com.github.hiteshsondhi88.libffmpeg.FFmpegExecuteResponseHandler;
@@ -8,17 +9,20 @@ import com.github.hiteshsondhi88.libffmpeg.FFmpegLoadBinaryResponseHandler;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import cafe.adriel.androidaudioconverter.callback.IConvertCallback;
 import cafe.adriel.androidaudioconverter.callback.ILoadCallback;
 import cafe.adriel.androidaudioconverter.model.AudioFormat;
 
 public class AndroidAudioConverter {
-
+    private static final String LOG_TAG = "AudioConverter";
     private static boolean loaded;
 
     private Context context;
-    private File audioFile;
+    private File inputFile;
+    private File outputFile;
     private AudioFormat format;
     private IConvertCallback callback;
 
@@ -65,8 +69,8 @@ public class AndroidAudioConverter {
         return new AndroidAudioConverter(context);
     }
 
-    public AndroidAudioConverter setFile(File originalFile) {
-        this.audioFile = originalFile;
+    public AndroidAudioConverter setInputFile(File originalFile) {
+        this.inputFile = originalFile;
         return this;
     }
 
@@ -85,21 +89,23 @@ public class AndroidAudioConverter {
             callback.onFailure(new Exception("FFmpeg not loaded"));
             return;
         }
-        if(audioFile == null || !audioFile.exists()){
+        if(inputFile == null || !inputFile.exists()){
             callback.onFailure(new IOException("File not exists"));
             return;
         }
-        if(!audioFile.canRead()){
+        if(!inputFile.canRead()){
             callback.onFailure(new IOException("Can't read the file. Missing permission?"));
             return;
         }
-        final File convertedFile = getConvertedFile(audioFile, format);
+
+        final File convertedFile = getConvertedFile(format);
         final String[] cmd = new String[]{
                 "-y",
-                "-i", audioFile.getPath(),
+                "-i", inputFile.getPath(),
                 "-sample_fmt", "s16",
                 "-ac", "1",
                 convertedFile.getPath()};
+
         try {
             FFmpeg.getInstance(context).execute(cmd, new FFmpegExecuteResponseHandler() {
                         @Override
@@ -132,9 +138,22 @@ public class AndroidAudioConverter {
         }
     }
 
-    private static File getConvertedFile(File originalFile, AudioFormat format){
-        String[] f = originalFile.getPath().split("\\.");
-        String filePath = originalFile.getPath().replace(f[f.length - 1], format.getFormat());
-        return new File(filePath);
+    private static File getConvertedFile(AudioFormat format){
+        try {
+            Path convertedFilePath = Files.createTempFile("converted_", "."+ format.getFormat());
+            return new File(convertedFilePath.toString());
+        }
+        catch(IOException ex)
+        {
+            Log.e(LOG_TAG, "Cannot create temporary file for conversion");
+            System.exit(0);
+        }
+        catch(Exception ex)
+        {
+            Log.e(LOG_TAG, "Unknown exception, abort");
+            System.exit(0);
+        }
+
+        return null;
     }
 }
